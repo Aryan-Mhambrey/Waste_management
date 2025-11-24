@@ -6,10 +6,10 @@ import { Button } from '../components/Button';
 import { Input, TextArea } from '../components/Input';
 import { StatusBadge } from '../components/StatusBadge';
 import { analyzeWasteDescription } from '../services/geminiService';
-import { Plus, History, LogOut, Wand2, Leaf, AlertTriangle, Loader2, Edit2, Check, X } from 'lucide-react';
+import { Plus, History, LogOut, Wand2, Leaf, AlertTriangle, Loader2, Edit2, Check, X, MapPin } from 'lucide-react';
 
 export const UserDashboard: React.FC = () => {
-  const { currentUser, requests, createRequest, logout, isDataLoading, updateUserName } = useStore();
+  const { currentUser, requests, createRequest, logout, isDataLoading, updateUserName, updateUserAddress } = useStore();
   const [activeTab, setActiveTab] = useState<'NEW' | 'HISTORY'>('NEW');
 
   // Form State
@@ -20,10 +20,14 @@ export const UserDashboard: React.FC = () => {
   const [submitLoading, setSubmitLoading] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<{tips: string, confidence: number} | null>(null);
 
-  // Name Editing State
+  // Profile Editing State
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState('');
   const [isNameSaving, setIsNameSaving] = useState(false);
+
+  const [isEditingAddress, setIsEditingAddress] = useState(false);
+  const [editAddressValue, setEditAddressValue] = useState('');
+  const [isAddressSaving, setIsAddressSaving] = useState(false);
 
   const myRequests = requests.filter(r => r.userId === currentUser?.id);
 
@@ -86,53 +90,130 @@ export const UserDashboard: React.FC = () => {
     }
   };
 
+  const handleNameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') saveName();
+    else if (e.key === 'Escape') cancelEditingName();
+  };
+
+  // Address Editing Handlers
+  const startEditingAddress = () => {
+    setEditAddressValue(currentUser?.address || '');
+    setIsEditingAddress(true);
+  };
+
+  const cancelEditingAddress = () => {
+    setIsEditingAddress(false);
+    setEditAddressValue('');
+  };
+
+  const saveAddress = async () => {
+    if (!editAddressValue.trim()) return;
+    setIsAddressSaving(true);
+    const success = await updateUserAddress(editAddressValue);
+    setIsAddressSaving(false);
+    if (success) {
+      setIsEditingAddress(false);
+    }
+  };
+
+  const handleAddressKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') saveAddress();
+    else if (e.key === 'Escape') cancelEditingAddress();
+  };
+
   return (
     <div className="min-h-screen bg-emerald-50/50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-emerald-100">
         <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <div className="bg-emerald-100 p-2 rounded-lg text-emerald-600">
+          <div className="flex items-center gap-3">
+            <div className="bg-emerald-100 p-2.5 rounded-lg text-emerald-600">
               <Leaf className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-800">EcoSort</h1>
-              {isEditingName ? (
-                <div className="flex items-center gap-2 mt-1">
-                  <input
-                    type="text"
-                    value={editNameValue}
-                    onChange={(e) => setEditNameValue(e.target.value)}
-                    className="text-xs border border-emerald-300 rounded px-2 py-1 focus:outline-none focus:border-emerald-500"
-                    placeholder="Enter name"
-                    autoFocus
-                  />
-                  <button 
-                    onClick={saveName} 
-                    disabled={isNameSaving}
-                    className="text-emerald-600 hover:text-emerald-700 bg-emerald-50 p-1 rounded transition-colors"
-                  >
-                    {isNameSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-                  </button>
-                  <button 
-                    onClick={cancelEditingName} 
-                    className="text-red-500 hover:text-red-600 bg-red-50 p-1 rounded transition-colors"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 text-xs text-emerald-600 mt-0.5">
-                  <p>Welcome, {currentUser?.name}</p>
-                  <button 
-                    onClick={startEditingName}
-                    className="text-emerald-400 hover:text-emerald-700 transition-colors"
-                    title="Edit Name"
-                  >
-                    <Edit2 className="w-3 h-3" />
-                  </button>
-                </div>
-              )}
+              <h1 className="text-xl font-bold text-gray-800 leading-none">EcoSort</h1>
+              
+              <div className="flex flex-col gap-0.5 mt-1.5">
+                {/* Name Edit */}
+                {isEditingName ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={editNameValue}
+                      onChange={(e) => setEditNameValue(e.target.value)}
+                      onKeyDown={handleNameKeyDown}
+                      className="text-sm border border-emerald-300 rounded px-2 py-0.5 focus:outline-none focus:border-emerald-500 text-gray-900 bg-white w-32"
+                      placeholder="Enter name"
+                      autoFocus
+                    />
+                    <button 
+                      onClick={saveName} 
+                      disabled={isNameSaving}
+                      className="text-emerald-600 hover:text-emerald-700 bg-emerald-50 p-0.5 rounded transition-colors"
+                    >
+                      {isNameSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                    </button>
+                    <button 
+                      onClick={cancelEditingName} 
+                      className="text-red-500 hover:text-red-600 bg-red-50 p-0.5 rounded transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
+                    <span>{currentUser?.name}</span>
+                    <button 
+                      onClick={startEditingName}
+                      className="text-gray-400 hover:text-emerald-600 transition-colors"
+                      title="Edit Name"
+                    >
+                      <Edit2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Address Edit */}
+                {isEditingAddress ? (
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-3 h-3 text-gray-400" />
+                    <input
+                      type="text"
+                      value={editAddressValue}
+                      onChange={(e) => setEditAddressValue(e.target.value)}
+                      onKeyDown={handleAddressKeyDown}
+                      className="text-xs border border-emerald-300 rounded px-2 py-0.5 focus:outline-none focus:border-emerald-500 text-gray-900 bg-white w-48"
+                      placeholder="Enter address"
+                      autoFocus
+                    />
+                    <button 
+                      onClick={saveAddress} 
+                      disabled={isAddressSaving}
+                      className="text-emerald-600 hover:text-emerald-700 bg-emerald-50 p-0.5 rounded transition-colors"
+                    >
+                      {isAddressSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                    </button>
+                    <button 
+                      onClick={cancelEditingAddress} 
+                      className="text-red-500 hover:text-red-600 bg-red-50 p-0.5 rounded transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 text-xs text-gray-500">
+                    <MapPin className="w-3 h-3" />
+                    <span>{currentUser?.address || 'No address set'}</span>
+                    <button 
+                      onClick={startEditingAddress}
+                      className="text-gray-400 hover:text-emerald-600 transition-colors ml-1"
+                      title="Update Address"
+                    >
+                      <Edit2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           <Button variant="secondary" onClick={handleLogout} className="text-sm">

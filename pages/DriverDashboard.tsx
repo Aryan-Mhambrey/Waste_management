@@ -38,6 +38,11 @@ export const DriverDashboard: React.FC = () => {
   };
 
   const handleStatusUpdate = async (id: string, status: 'REJECTED' | 'COMPLETED') => {
+    if (status === 'REJECTED') {
+      if (!window.confirm('Are you sure you want to reject this pickup request? This will mark it as rejected for the user.')) {
+        return;
+      }
+    }
     setLoadingAction(id);
     await updateRequestStatus(id, status);
     setLoadingAction(null);

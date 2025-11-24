@@ -15,6 +15,7 @@ interface StoreContextType {
   assignDriver: (requestId: string, driverId: string) => Promise<void>;
   refreshRequests: () => Promise<void>;
   updateUserName: (name: string) => Promise<boolean>;
+  updateUserAddress: (address: string) => Promise<boolean>;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -237,6 +238,29 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return false;
   };
 
+  const updateUserAddress = async (address: string) => {
+    if (!currentUser) return false;
+
+    try {
+      const { data, error } = await supabase.auth.updateUser({
+        data: { address }
+      });
+
+      if (error) {
+        console.error("Error updating user address:", error);
+        return false;
+      }
+
+      if (data.user) {
+        setCurrentUser(parseUser(data.user));
+        return true;
+      }
+    } catch (err) {
+      console.error("Update user address exception:", err);
+    }
+    return false;
+  };
+
   return (
     <StoreContext.Provider value={{ 
       currentUser, 
@@ -250,7 +274,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       updateRequestStatus, 
       assignDriver,
       refreshRequests: () => fetchRequests(false),
-      updateUserName
+      updateUserName,
+      updateUserAddress
     }}>
       {children}
     </StoreContext.Provider>
