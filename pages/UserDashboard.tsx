@@ -6,10 +6,10 @@ import { Button } from '../components/Button';
 import { Input, TextArea } from '../components/Input';
 import { StatusBadge } from '../components/StatusBadge';
 import { analyzeWasteDescription } from '../services/geminiService';
-import { Plus, History, LogOut, Wand2, Leaf, AlertTriangle } from 'lucide-react';
+import { Plus, History, LogOut, Wand2, Leaf, AlertTriangle, Loader2 } from 'lucide-react';
 
 export const UserDashboard: React.FC = () => {
-  const { currentUser, requests, createRequest, logout } = useStore();
+  const { currentUser, requests, createRequest, logout, isDataLoading } = useStore();
   const [activeTab, setActiveTab] = useState<'NEW' | 'HISTORY'>('NEW');
 
   // Form State
@@ -56,6 +56,10 @@ export const UserDashboard: React.FC = () => {
     }
   };
 
+  const handleLogout = async () => {
+    await logout();
+  };
+
   return (
     <div className="min-h-screen bg-emerald-50/50">
       {/* Header */}
@@ -70,7 +74,7 @@ export const UserDashboard: React.FC = () => {
               <p className="text-xs text-emerald-600">Welcome, {currentUser?.name}</p>
             </div>
           </div>
-          <Button variant="secondary" onClick={logout} className="text-sm">
+          <Button variant="secondary" onClick={handleLogout} className="text-sm">
             <LogOut className="w-4 h-4" /> Sign Out
           </Button>
         </div>
@@ -223,7 +227,11 @@ export const UserDashboard: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-4">
-            {myRequests.length === 0 ? (
+            {isDataLoading && myRequests.length === 0 ? (
+              <div className="py-12 flex justify-center text-emerald-600">
+                <Loader2 className="w-8 h-8 animate-spin" />
+              </div>
+            ) : myRequests.length === 0 ? (
               <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-gray-300">
                 <Leaf className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                 <h3 className="text-gray-500 font-medium">No requests yet</h3>

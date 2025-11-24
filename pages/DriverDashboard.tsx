@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { useStore } from '../context/StoreContext';
 import { Button } from '../components/Button';
 import { StatusBadge } from '../components/StatusBadge';
-import { Truck, LogOut, MapPin, CheckCircle, XCircle, Navigation, User, RefreshCw } from 'lucide-react';
+import { Truck, LogOut, MapPin, CheckCircle, XCircle, Navigation, User, RefreshCw, Loader2 } from 'lucide-react';
 import { WasteRequest } from '../types';
 
 export const DriverDashboard: React.FC = () => {
-  const { currentUser, requests, updateRequestStatus, assignDriver, logout, refreshRequests } = useStore();
+  const { currentUser, requests, updateRequestStatus, assignDriver, logout, refreshRequests, isDataLoading } = useStore();
   const [filter, setFilter] = useState<'AVAILABLE' | 'MY_TASKS'>('AVAILABLE');
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -17,10 +17,16 @@ export const DriverDashboard: React.FC = () => {
   // My tasks are those assigned to this driver
   const myTasks = requests.filter(r => r.driverId === currentUser?.id);
 
+  const displayedRequests = filter === 'AVAILABLE' ? availableRequests : myTasks;
+
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await refreshRequests();
     setIsRefreshing(false);
+  };
+
+  const handleLogout = async () => {
+    await logout();
   };
 
   const handleAccept = async (req: WasteRequest) => {
@@ -51,7 +57,7 @@ export const DriverDashboard: React.FC = () => {
               <p className="text-xs text-emerald-300">Logged in as {currentUser?.name}</p>
             </div>
           </div>
-          <Button variant="secondary" onClick={logout} className="bg-emerald-800 border-emerald-700 text-white hover:bg-emerald-700 text-sm">
+          <Button variant="secondary" onClick={handleLogout} className="bg-emerald-800 border-emerald-700 text-white hover:bg-emerald-700 text-sm">
             <LogOut className="w-4 h-4" /> Exit
           </Button>
         </div>
@@ -104,12 +110,16 @@ export const DriverDashboard: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {(filter === 'AVAILABLE' ? availableRequests : myTasks).length === 0 ? (
+          {isDataLoading && displayedRequests.length === 0 ? (
+            <div className="col-span-full py-12 flex justify-center text-gray-400">
+               <Loader2 className="w-8 h-8 animate-spin" />
+            </div>
+          ) : displayedRequests.length === 0 ? (
             <div className="col-span-full py-12 text-center text-gray-400">
               <p>No requests found in this category.</p>
             </div>
           ) : (
-            (filter === 'AVAILABLE' ? availableRequests : myTasks).map(req => (
+            displayedRequests.map(req => (
               <div key={req.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
                 <div className="p-6 flex-1">
                   <div className="flex justify-between items-start mb-4">

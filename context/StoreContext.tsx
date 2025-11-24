@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { User, WasteRequest, RequestStatus, Role } from '../types';
 import { supabase } from '../services/supabaseClient';
 
@@ -6,6 +6,7 @@ interface StoreContextType {
   currentUser: User | null;
   requests: WasteRequest[];
   loading: boolean;
+  isDataLoading: boolean;
   login: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
   register: (user: Omit<User, 'id'> & { password: string }) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
@@ -20,55 +21,25 @@ const StoreContext = createContext<StoreContextType | undefined>(undefined);
 export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [requests, setRequests] = useState<WasteRequest[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // App-level loading (Auth)
+  const [isDataLoading, setIsDataLoading] = useState(false); // Data-level loading
 
-  // Initialize Session
-  useEffect(() => {
-    const getSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          const metadata = session.user.user_metadata || {};
-          setCurrentUser({
-            id: session.user.id,
-            email: session.user.email!,
-            name: metadata.name || 'User',
-            address: metadata.address || '',
-            role: (metadata.role as Role) || 'USER'
-          });
-          await fetchRequests();
-        }
-      } catch (error) {
-        console.error("Session init error:", error);
-      } finally {
-        setLoading(false);
-      }
+  // Helper to safely parse user from session
+  const parseUser = (sessionUser: any): User => {
+    const metadata = sessionUser.user_metadata || {};
+    return {
+      id: sessionUser.id,
+      email: sessionUser.email!,
+      name: metadata.name || 'User',
+      address: metadata.address || '',
+      role: (metadata.role as Role) || 'USER'
     };
+  };
 
-    getSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        const metadata = session.user.user_metadata || {};
-        setCurrentUser({
-          id: session.user.id,
-          email: session.user.email!,
-          name: metadata.name || 'User',
-          address: metadata.address || '',
-          role: (metadata.role as Role) || 'USER'
-        });
-        await fetchRequests();
-      } else {
-        setCurrentUser(null);
-        setRequests([]);
-      }
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const fetchRequests = async () => {
+  // Fetch requests independently of auth loading
+  // Wrapped in useCallback to allow usage in dependency arrays
+  const fetchRequests = useCallback(async (silent: boolean = false) => {
+    if (!silent) setIsDataLoading(true);
     try {
       const { data, error } = await supabase
         .from('requests')
@@ -95,8 +66,71 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       }
     } catch (err) {
       console.error("Fetch request exception:", err);
+    } finally {
+      if (!silent) setIsDataLoading(false);
     }
-  };
+  }, []);
+
+  // Initialize Session
+  useEffect(() => {
+    let mounted = true;
+
+    const initSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user && mounted) {
+          setCurrentUser(parseUser(session.user));
+          // Call fetchRequests but DO NOT await it to keep initial load fast
+          fetchRequests();
+        }
+      } catch (error) {
+        console.error("Session init error:", error);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    initSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        setCurrentUser(parseUser(session.user));
+        if (event === 'SIGNED_IN') fetchRequests();
+      } else if (event === 'SIGNED_OUT') {
+        setCurrentUser(null);
+        setRequests([]);
+      }
+      setLoading(false);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [fetchRequests]);
+
+  // Realtime Subscription
+  useEffect(() => {
+    if (!currentUser) return;
+
+    // Subscribe to changes in the 'requests' table
+    const channel = supabase
+      .channel('public:requests')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'requests' },
+        (payload) => {
+          console.log('Realtime update received:', payload);
+          // Refresh data silently (no loading spinner) when data changes
+          fetchRequests(true);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser, fetchRequests]);
 
   const login = async (email: string, pass: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
@@ -122,9 +156,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
-    setCurrentUser(null);
-    setRequests([]);
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error("Logout error (ignoring):", error);
+    } finally {
+      // Always force local state clear
+      setCurrentUser(null);
+      setRequests([]);
+    }
   };
 
   const createRequest = async (reqData: Omit<WasteRequest, 'id' | 'userId' | 'userName' | 'userAddress' | 'status' | 'createdAt'>) => {
@@ -146,7 +186,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         console.error('Create request error:', error);
         return false;
       }
-      await fetchRequests();
+      // Optimistically fetch or just let real-time handle it (fetching for now)
+      fetchRequests();
       return true;
     } catch (err) {
       console.error("Create request exception:", err);
@@ -177,13 +218,14 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       currentUser, 
       requests, 
       loading,
+      isDataLoading,
       login, 
       register, 
       logout, 
       createRequest, 
       updateRequestStatus, 
       assignDriver,
-      refreshRequests: fetchRequests
+      refreshRequests: () => fetchRequests(false)
     }}>
       {children}
     </StoreContext.Provider>
