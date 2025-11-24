@@ -1,109 +1,190 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, WasteRequest, RequestStatus, Role } from '../types';
+import { supabase } from '../services/supabaseClient';
 
 interface StoreContextType {
   currentUser: User | null;
-  users: User[];
   requests: WasteRequest[];
-  login: (email: string, password: string) => boolean;
-  register: (user: Omit<User, 'id'>) => boolean;
-  logout: () => void;
-  createRequest: (req: Omit<WasteRequest, 'id' | 'userId' | 'userName' | 'userAddress' | 'status' | 'createdAt'>) => void;
-  updateRequestStatus: (requestId: string, status: RequestStatus) => void;
-  assignDriver: (requestId: string, driverId: string) => void;
+  loading: boolean;
+  login: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+  register: (user: Omit<User, 'id'> & { password: string }) => Promise<{ success: boolean; error?: string }>;
+  logout: () => Promise<void>;
+  createRequest: (req: Omit<WasteRequest, 'id' | 'userId' | 'userName' | 'userAddress' | 'status' | 'createdAt'>) => Promise<boolean>;
+  updateRequestStatus: (requestId: string, status: RequestStatus) => Promise<void>;
+  assignDriver: (requestId: string, driverId: string) => Promise<void>;
+  refreshRequests: () => Promise<void>;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
-// Initial Mock Data
-const MOCK_USERS: User[] = [
-  { id: '1', name: 'John Doe', email: 'user@test.com', address: '123 Green St, Eco City', role: 'USER', password: 'password' },
-  { id: '2', name: 'Driver Mike', email: 'driver@test.com', address: 'Depot 1', role: 'DRIVER', password: 'password' }
-];
-
-const MOCK_REQUESTS: WasteRequest[] = [
-  {
-    id: 'req_1',
-    userId: '1',
-    userName: 'John Doe',
-    userAddress: '123 Green St, Eco City',
-    category: 'E-WASTE',
-    description: 'Old laptop battery and wires',
-    quantity: '1 bag',
-    status: 'PENDING',
-    createdAt: Date.now() - 100000,
-    aiInsights: 'Handle with care. Lithium batteries can be fire hazards.'
-  }
-];
-
 export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Load from local storage or fallback to mock
-  const [users, setUsers] = useState<User[]>(() => {
-    const saved = localStorage.getItem('ecosort_users');
-    return saved ? JSON.parse(saved) : MOCK_USERS;
-  });
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [requests, setRequests] = useState<WasteRequest[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const [requests, setRequests] = useState<WasteRequest[]>(() => {
-    const saved = localStorage.getItem('ecosort_requests');
-    return saved ? JSON.parse(saved) : MOCK_REQUESTS;
-  });
-
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('ecosort_current_user');
-    return saved ? JSON.parse(saved) : null;
-  });
-
-  // Persistence Effects
-  useEffect(() => localStorage.setItem('ecosort_users', JSON.stringify(users)), [users]);
-  useEffect(() => localStorage.setItem('ecosort_requests', JSON.stringify(requests)), [requests]);
+  // Initialize Session
   useEffect(() => {
-    if (currentUser) localStorage.setItem('ecosort_current_user', JSON.stringify(currentUser));
-    else localStorage.removeItem('ecosort_current_user');
-  }, [currentUser]);
-
-  const login = (email: string, pass: string): boolean => {
-    const user = users.find(u => u.email === email && u.password === pass);
-    if (user) {
-      setCurrentUser(user);
-      return true;
-    }
-    return false;
-  };
-
-  const register = (userData: Omit<User, 'id'>): boolean => {
-    if (users.some(u => u.email === userData.email)) return false;
-    const newUser = { ...userData, id: crypto.randomUUID() };
-    setUsers([...users, newUser]);
-    setCurrentUser(newUser);
-    return true;
-  };
-
-  const logout = () => setCurrentUser(null);
-
-  const createRequest = (reqData: Omit<WasteRequest, 'id' | 'userId' | 'userName' | 'userAddress' | 'status' | 'createdAt'>) => {
-    if (!currentUser) return;
-    const newReq: WasteRequest = {
-      id: crypto.randomUUID(),
-      userId: currentUser.id,
-      userName: currentUser.name,
-      userAddress: currentUser.address,
-      status: 'PENDING',
-      createdAt: Date.now(),
-      ...reqData
+    const getSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          const metadata = session.user.user_metadata || {};
+          setCurrentUser({
+            id: session.user.id,
+            email: session.user.email!,
+            name: metadata.name || 'User',
+            address: metadata.address || '',
+            role: (metadata.role as Role) || 'USER'
+          });
+          await fetchRequests();
+        }
+      } catch (error) {
+        console.error("Session init error:", error);
+      } finally {
+        setLoading(false);
+      }
     };
-    setRequests(prev => [newReq, ...prev]);
+
+    getSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        const metadata = session.user.user_metadata || {};
+        setCurrentUser({
+          id: session.user.id,
+          email: session.user.email!,
+          name: metadata.name || 'User',
+          address: metadata.address || '',
+          role: (metadata.role as Role) || 'USER'
+        });
+        await fetchRequests();
+      } else {
+        setCurrentUser(null);
+        setRequests([]);
+      }
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const fetchRequests = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('requests')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error('Error fetching requests:', error.message);
+      } else {
+        const mappedRequests: WasteRequest[] = (data || []).map((r: any) => ({
+          id: r.id,
+          userId: r.user_id,
+          userName: r.user_name,
+          userAddress: r.user_address,
+          category: r.category,
+          description: r.description,
+          quantity: r.quantity,
+          status: r.status,
+          driverId: r.driver_id,
+          createdAt: r.created_at,
+          aiInsights: r.ai_insights
+        }));
+        setRequests(mappedRequests);
+      }
+    } catch (err) {
+      console.error("Fetch request exception:", err);
+    }
   };
 
-  const updateRequestStatus = (requestId: string, status: RequestStatus) => {
-    setRequests(prev => prev.map(r => r.id === requestId ? { ...r, status } : r));
+  const login = async (email: string, pass: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
+    if (error) return { success: false, error: error.message };
+    return { success: true };
   };
 
-  const assignDriver = (requestId: string, driverId: string) => {
-      setRequests(prev => prev.map(r => r.id === requestId ? { ...r, driverId, status: 'ACCEPTED' } : r));
-  }
+  const register = async (userData: Omit<User, 'id'> & { password: string }) => {
+    const { error } = await supabase.auth.signUp({
+      email: userData.email,
+      password: userData.password,
+      options: {
+        data: {
+          name: userData.name,
+          address: userData.address,
+          role: userData.role
+        }
+      }
+    });
+
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
+    setCurrentUser(null);
+    setRequests([]);
+  };
+
+  const createRequest = async (reqData: Omit<WasteRequest, 'id' | 'userId' | 'userName' | 'userAddress' | 'status' | 'createdAt'>) => {
+    if (!currentUser) return false;
+
+    try {
+      const { error } = await supabase.from('requests').insert({
+        user_id: currentUser.id,
+        user_name: currentUser.name,
+        user_address: currentUser.address,
+        category: reqData.category,
+        description: reqData.description,
+        quantity: reqData.quantity,
+        ai_insights: reqData.aiInsights,
+        status: 'PENDING'
+      });
+
+      if (error) {
+        console.error('Create request error:', error);
+        return false;
+      }
+      await fetchRequests();
+      return true;
+    } catch (err) {
+      console.error("Create request exception:", err);
+      return false;
+    }
+  };
+
+  const updateRequestStatus = async (requestId: string, status: RequestStatus) => {
+    const { error } = await supabase
+      .from('requests')
+      .update({ status })
+      .eq('id', requestId);
+
+    if (!error) await fetchRequests();
+  };
+
+  const assignDriver = async (requestId: string, driverId: string) => {
+    const { error } = await supabase
+      .from('requests')
+      .update({ driver_id: driverId, status: 'ACCEPTED' })
+      .eq('id', requestId);
+
+    if (!error) await fetchRequests();
+  };
 
   return (
-    <StoreContext.Provider value={{ currentUser, users, requests, login, register, logout, createRequest, updateRequestStatus, assignDriver }}>
+    <StoreContext.Provider value={{ 
+      currentUser, 
+      requests, 
+      loading,
+      login, 
+      register, 
+      logout, 
+      createRequest, 
+      updateRequestStatus, 
+      assignDriver,
+      refreshRequests: fetchRequests
+    }}>
       {children}
     </StoreContext.Provider>
   );

@@ -17,9 +17,10 @@ export const UserDashboard: React.FC = () => {
   const [category, setCategory] = useState<WasteCategory>('DRY');
   const [quantity, setQuantity] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
+  const [submitLoading, setSubmitLoading] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<{tips: string, confidence: number} | null>(null);
 
-  const myRequests = requests.filter(r => r.userId === currentUser?.id).sort((a,b) => b.createdAt - a.createdAt);
+  const myRequests = requests.filter(r => r.userId === currentUser?.id);
 
   const handleAiAnalyze = async () => {
     if (!description) return;
@@ -34,20 +35,25 @@ export const UserDashboard: React.FC = () => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    createRequest({
+    setSubmitLoading(true);
+    const success = await createRequest({
       category,
       description,
       quantity,
       aiInsights: aiAnalysis?.tips
     });
-    // Reset
-    setDescription('');
-    setQuantity('');
-    setCategory('DRY');
-    setAiAnalysis(null);
-    setActiveTab('HISTORY');
+    setSubmitLoading(false);
+
+    if (success) {
+      // Reset
+      setDescription('');
+      setQuantity('');
+      setCategory('DRY');
+      setAiAnalysis(null);
+      setActiveTab('HISTORY');
+    }
   };
 
   return (
@@ -182,7 +188,7 @@ export const UserDashboard: React.FC = () => {
                   </div>
 
                   <div className="pt-4 border-t border-gray-100">
-                    <Button type="submit" className="w-full md:w-auto" disabled={!description || !quantity}>
+                    <Button type="submit" className="w-full md:w-auto" isLoading={submitLoading} disabled={!description || !quantity}>
                       Submit Pickup Request
                     </Button>
                   </div>

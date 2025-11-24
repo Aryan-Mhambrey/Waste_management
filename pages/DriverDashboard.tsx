@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { useStore } from '../context/StoreContext';
 import { Button } from '../components/Button';
 import { StatusBadge } from '../components/StatusBadge';
-import { Truck, LogOut, MapPin, CheckCircle, XCircle, Navigation, User } from 'lucide-react';
+import { Truck, LogOut, MapPin, CheckCircle, XCircle, Navigation, User, RefreshCw } from 'lucide-react';
 import { WasteRequest } from '../types';
 
 export const DriverDashboard: React.FC = () => {
-  const { currentUser, requests, updateRequestStatus, assignDriver, logout } = useStore();
+  const { currentUser, requests, updateRequestStatus, assignDriver, logout, refreshRequests } = useStore();
   const [filter, setFilter] = useState<'AVAILABLE' | 'MY_TASKS'>('AVAILABLE');
+  const [loadingAction, setLoadingAction] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Available requests are PENDING and not assigned
   const availableRequests = requests.filter(r => r.status === 'PENDING');
@@ -15,10 +17,24 @@ export const DriverDashboard: React.FC = () => {
   // My tasks are those assigned to this driver
   const myTasks = requests.filter(r => r.driverId === currentUser?.id);
 
-  const handleAccept = (req: WasteRequest) => {
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await refreshRequests();
+    setIsRefreshing(false);
+  };
+
+  const handleAccept = async (req: WasteRequest) => {
     if (currentUser) {
-      assignDriver(req.id, currentUser.id);
+      setLoadingAction(req.id);
+      await assignDriver(req.id, currentUser.id);
+      setLoadingAction(null);
     }
+  };
+
+  const handleStatusUpdate = async (id: string, status: 'REJECTED' | 'COMPLETED') => {
+    setLoadingAction(id);
+    await updateRequestStatus(id, status);
+    setLoadingAction(null);
   };
 
   return (
@@ -59,22 +75,31 @@ export const DriverDashboard: React.FC = () => {
         </div>
 
         {/* Filters */}
-        <div className="flex gap-2 mb-6">
-          <button
-            onClick={() => setFilter('AVAILABLE')}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-              filter === 'AVAILABLE' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
-            }`}
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex gap-2">
+            <button
+              onClick={() => setFilter('AVAILABLE')}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                filter === 'AVAILABLE' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              Available Requests
+            </button>
+            <button
+              onClick={() => setFilter('MY_TASKS')}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                filter === 'MY_TASKS' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              My Schedule
+            </button>
+          </div>
+          <button 
+            onClick={handleRefresh}
+            className={`p-2 rounded-full hover:bg-gray-200 transition-colors ${isRefreshing ? 'animate-spin' : ''}`}
+            title="Refresh Data"
           >
-            Available Requests
-          </button>
-          <button
-            onClick={() => setFilter('MY_TASKS')}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-              filter === 'MY_TASKS' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
-            }`}
-          >
-            My Schedule
+            <RefreshCw className="w-5 h-5 text-gray-500" />
           </button>
         </div>
 
@@ -89,7 +114,7 @@ export const DriverDashboard: React.FC = () => {
                 <div className="p-6 flex-1">
                   <div className="flex justify-between items-start mb-4">
                     <StatusBadge status={req.status} />
-                    <span className="text-xs font-mono text-gray-400">#{req.id.slice(-6)}</span>
+                    <span className="text-xs font-mono text-gray-400">#{req.id.slice(0,6)}</span>
                   </div>
                   
                   <div className="flex items-start gap-3 mb-4">
@@ -104,7 +129,7 @@ export const DriverDashboard: React.FC = () => {
                     <User className="w-5 h-5 text-gray-400 mt-1 flex-shrink-0" />
                     <div>
                       <p className="text-sm font-medium text-gray-800">{req.userName}</p>
-                      <p className="text-xs text-gray-500">User ID: {req.userId}</p>
+                      <p className="text-xs text-gray-500">User ID: {req.userId.slice(0,8)}...</p>
                     </div>
                   </div>
 
@@ -125,7 +150,11 @@ export const DriverDashboard: React.FC = () => {
 
                 <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
                   {filter === 'AVAILABLE' ? (
-                    <Button onClick={() => handleAccept(req)} className="w-full justify-center">
+                    <Button 
+                      onClick={() => handleAccept(req)} 
+                      className="w-full justify-center"
+                      isLoading={loadingAction === req.id}
+                    >
                       Accept Request
                     </Button>
                   ) : (
@@ -134,14 +163,16 @@ export const DriverDashboard: React.FC = () => {
                         <>
                           <Button 
                             variant="danger" 
-                            onClick={() => updateRequestStatus(req.id, 'REJECTED')}
+                            onClick={() => handleStatusUpdate(req.id, 'REJECTED')}
                             className="flex-1 justify-center"
+                            isLoading={loadingAction === req.id}
                           >
                             <XCircle className="w-4 h-4" /> Reject
                           </Button>
                           <Button 
-                            onClick={() => updateRequestStatus(req.id, 'COMPLETED')}
+                            onClick={() => handleStatusUpdate(req.id, 'COMPLETED')}
                             className="flex-1 justify-center"
+                            isLoading={loadingAction === req.id}
                           >
                             <CheckCircle className="w-4 h-4" /> Complete
                           </Button>

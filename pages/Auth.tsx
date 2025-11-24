@@ -3,13 +3,14 @@ import { useStore } from '../context/StoreContext';
 import { Role } from '../types';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
-import { Recycle, Truck, UserCircle } from 'lucide-react';
+import { Recycle, Truck, UserCircle, AlertCircle } from 'lucide-react';
 
 export const Auth: React.FC = () => {
   const { login, register } = useStore();
   const [isLogin, setIsLogin] = useState(true);
   const [role, setRole] = useState<Role>('USER');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     email: '',
@@ -18,26 +19,41 @@ export const Auth: React.FC = () => {
     address: ''
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsLoading(true);
 
-    if (isLogin) {
-      const success = login(formData.email, formData.password);
-      if (!success) setError('Invalid email or password');
-    } else {
-      if (!formData.name || !formData.email || !formData.password || (!formData.address && role === 'USER')) {
-        setError('Please fill all fields');
-        return;
+    try {
+      if (isLogin) {
+        const { success, error: loginError } = await login(formData.email, formData.password);
+        if (!success) setError(loginError || 'Invalid email or password');
+      } else {
+        if (!formData.name || !formData.email || !formData.password || (!formData.address && role === 'USER')) {
+          setError('Please fill all fields');
+          setIsLoading(false);
+          return;
+        }
+        const { success, error: regError } = await register({
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+          address: formData.address || 'N/A',
+          role
+        });
+        if (!success) setError(regError || 'Registration failed');
+        else if (success && !isLogin) {
+           // Auto login or show success message? Supabase usually auto logins unless confirm email is on.
+           // If email confirmation is required, we might need to tell them.
+           // For this demo, assuming auto-login or immediate availability.
+           // If error, it's caught above.
+           // If success, user state in context will update and redirect app.
+        }
       }
-      const success = register({
-        name: formData.name,
-        email: formData.email,
-        password: formData.password,
-        address: formData.address || 'N/A', // Drivers might not need personal address for this demo
-        role
-      });
-      if (!success) setError('Email already registered');
+    } catch (err: any) {
+      setError(err.message || 'An unexpected error occurred');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -133,9 +149,14 @@ export const Auth: React.FC = () => {
               onChange={e => setFormData({...formData, password: e.target.value})}
             />
 
-            {error && <div className="text-red-500 text-sm bg-red-50 p-2 rounded">{error}</div>}
+            {error && (
+              <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" />
+                {error}
+              </div>
+            )}
 
-            <Button type="submit" className="w-full py-3 mt-4">
+            <Button type="submit" className="w-full py-3 mt-4" isLoading={isLoading}>
               {isLogin ? 'Sign In' : 'Create Account'}
             </Button>
           </form>

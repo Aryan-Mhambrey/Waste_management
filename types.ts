@@ -10,7 +10,6 @@ export interface User {
   email: string;
   address: string;
   role: Role;
-  password?: string; // In a real app, this would be hashed or not stored in frontend state
 }
 
 export interface WasteRequest {
@@ -20,14 +19,15 @@ export interface WasteRequest {
   userAddress: string;
   category: WasteCategory;
   description: string;
-  quantity: string; // e.g., "2 bags", "5 kg"
+  quantity: string;
   status: RequestStatus;
   driverId?: string;
-  createdAt: number;
-  aiInsights?: string; // Optional AI advice stored with request
+  createdAt: string; // Changed to ISO string for Supabase compatibility
+  aiInsights?: string;
 }
 
 export interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
+  loading: boolean;
 }
