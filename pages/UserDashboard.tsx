@@ -6,10 +6,10 @@ import { Button } from '../components/Button';
 import { Input, TextArea } from '../components/Input';
 import { StatusBadge } from '../components/StatusBadge';
 import { analyzeWasteDescription } from '../services/geminiService';
-import { Plus, History, LogOut, Wand2, Leaf, AlertTriangle, Loader2 } from 'lucide-react';
+import { Plus, History, LogOut, Wand2, Leaf, AlertTriangle, Loader2, Edit2, Check, X } from 'lucide-react';
 
 export const UserDashboard: React.FC = () => {
-  const { currentUser, requests, createRequest, logout, isDataLoading } = useStore();
+  const { currentUser, requests, createRequest, logout, isDataLoading, updateUserName } = useStore();
   const [activeTab, setActiveTab] = useState<'NEW' | 'HISTORY'>('NEW');
 
   // Form State
@@ -19,6 +19,11 @@ export const UserDashboard: React.FC = () => {
   const [aiLoading, setAiLoading] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<{tips: string, confidence: number} | null>(null);
+
+  // Name Editing State
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editNameValue, setEditNameValue] = useState('');
+  const [isNameSaving, setIsNameSaving] = useState(false);
 
   const myRequests = requests.filter(r => r.userId === currentUser?.id);
 
@@ -60,6 +65,27 @@ export const UserDashboard: React.FC = () => {
     await logout();
   };
 
+  // Name Editing Handlers
+  const startEditingName = () => {
+    setEditNameValue(currentUser?.name || '');
+    setIsEditingName(true);
+  };
+
+  const cancelEditingName = () => {
+    setIsEditingName(false);
+    setEditNameValue('');
+  };
+
+  const saveName = async () => {
+    if (!editNameValue.trim()) return;
+    setIsNameSaving(true);
+    const success = await updateUserName(editNameValue);
+    setIsNameSaving(false);
+    if (success) {
+      setIsEditingName(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-emerald-50/50">
       {/* Header */}
@@ -71,7 +97,42 @@ export const UserDashboard: React.FC = () => {
             </div>
             <div>
               <h1 className="text-xl font-bold text-gray-800">EcoSort</h1>
-              <p className="text-xs text-emerald-600">Welcome, {currentUser?.name}</p>
+              {isEditingName ? (
+                <div className="flex items-center gap-2 mt-1">
+                  <input
+                    type="text"
+                    value={editNameValue}
+                    onChange={(e) => setEditNameValue(e.target.value)}
+                    className="text-xs border border-emerald-300 rounded px-2 py-1 focus:outline-none focus:border-emerald-500"
+                    placeholder="Enter name"
+                    autoFocus
+                  />
+                  <button 
+                    onClick={saveName} 
+                    disabled={isNameSaving}
+                    className="text-emerald-600 hover:text-emerald-700 bg-emerald-50 p-1 rounded transition-colors"
+                  >
+                    {isNameSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                  </button>
+                  <button 
+                    onClick={cancelEditingName} 
+                    className="text-red-500 hover:text-red-600 bg-red-50 p-1 rounded transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-xs text-emerald-600 mt-0.5">
+                  <p>Welcome, {currentUser?.name}</p>
+                  <button 
+                    onClick={startEditingName}
+                    className="text-emerald-400 hover:text-emerald-700 transition-colors"
+                    title="Edit Name"
+                  >
+                    <Edit2 className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
           <Button variant="secondary" onClick={handleLogout} className="text-sm">

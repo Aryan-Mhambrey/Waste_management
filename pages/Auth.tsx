@@ -43,11 +43,7 @@ export const Auth: React.FC = () => {
         });
         if (!success) setError(regError || 'Registration failed');
         else if (success && !isLogin) {
-           // Auto login or show success message? Supabase usually auto logins unless confirm email is on.
-           // If email confirmation is required, we might need to tell them.
-           // For this demo, assuming auto-login or immediate availability.
-           // If error, it's caught above.
-           // If success, user state in context will update and redirect app.
+           // Auto login logic handled by session listener in StoreContext
         }
       }
     } catch (err: any) {
@@ -58,33 +54,33 @@ export const Auth: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl flex overflow-hidden min-h-[600px]">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-emerald-50/50">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl flex overflow-hidden min-h-[600px] border border-gray-100">
         {/* Left Side - Hero */}
         <div className="hidden md:flex flex-col justify-center items-center w-1/2 bg-emerald-600 text-white p-12 relative">
           <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[url('https://www.transparenttextures.com/patterns/leaf.png')]"></div>
-          <Recycle className="w-24 h-24 mb-6" />
-          <h1 className="text-4xl font-bold mb-4 text-center">EcoSort</h1>
+          <Recycle className="w-24 h-24 mb-6 text-emerald-50" />
+          <h1 className="text-4xl font-bold mb-4 text-center text-white">EcoSort</h1>
           <p className="text-center text-emerald-100 text-lg leading-relaxed">
             Join our community to manage waste efficiently. Separate, Request, and Track your waste disposal with AI-powered assistance.
           </p>
         </div>
 
         {/* Right Side - Form */}
-        <div className="w-full md:w-1/2 p-8 md:p-12 flex flex-col justify-center">
+        <div className="w-full md:w-1/2 p-8 md:p-12 flex flex-col justify-center bg-white">
           <div className="flex justify-end mb-4">
             <button 
               onClick={() => { setIsLogin(!isLogin); setError(''); }}
-              className="text-emerald-600 text-sm font-semibold hover:underline"
+              className="text-emerald-700 text-sm font-bold hover:underline"
             >
               {isLogin ? 'Create Account' : 'Back to Login'}
             </button>
           </div>
 
-          <h2 className="text-3xl font-bold text-gray-800 mb-2">
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">
             {isLogin ? 'Welcome Back' : 'Get Started'}
           </h2>
-          <p className="text-gray-500 mb-8">
+          <p className="text-gray-600 mb-8 font-medium">
             {isLogin ? 'Enter your details to access your dashboard' : 'Create your account to start recycling'}
           </p>
 
@@ -94,7 +90,7 @@ export const Auth: React.FC = () => {
                 type="button"
                 onClick={() => setRole('USER')}
                 className={`flex-1 p-3 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${
-                  role === 'USER' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-200 text-gray-400 hover:border-emerald-200'
+                  role === 'USER' ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-gray-200 text-gray-500 hover:border-emerald-200'
                 }`}
               >
                 <UserCircle className="w-6 h-6" />
@@ -104,7 +100,7 @@ export const Auth: React.FC = () => {
                 type="button"
                 onClick={() => setRole('DRIVER')}
                 className={`flex-1 p-3 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${
-                  role === 'DRIVER' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-200 text-gray-400 hover:border-emerald-200'
+                  role === 'DRIVER' ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-gray-200 text-gray-500 hover:border-emerald-200'
                 }`}
               >
                 <Truck className="w-6 h-6" />
@@ -150,13 +146,13 @@ export const Auth: React.FC = () => {
             />
 
             {error && (
-              <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg flex items-center gap-2">
+              <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg flex items-center gap-2 border border-red-100">
                 <AlertCircle className="w-4 h-4" />
                 {error}
               </div>
             )}
 
-            <Button type="submit" className="w-full py-3 mt-4" isLoading={isLoading}>
+            <Button type="submit" className="w-full py-3 mt-4 font-bold" isLoading={isLoading}>
               {isLogin ? 'Sign In' : 'Create Account'}
             </Button>
           </form>
