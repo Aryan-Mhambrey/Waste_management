@@ -20,7 +20,7 @@ export const UserDashboard: React.FC = () => {
   const [submitLoading, setSubmitLoading] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<{tips: string, confidence: number} | null>(null);
 
-  // Profile Editing State
+  // Profile Editing State (Header)
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState('');
   const [isNameSaving, setIsNameSaving] = useState(false);
@@ -28,6 +28,10 @@ export const UserDashboard: React.FC = () => {
   const [isEditingAddress, setIsEditingAddress] = useState(false);
   const [editAddressValue, setEditAddressValue] = useState('');
   const [isAddressSaving, setIsAddressSaving] = useState(false);
+
+  // Profile Editing State (Form specific)
+  const [isFormEditingAddress, setIsFormEditingAddress] = useState(false);
+  const [formEditAddressValue, setFormEditAddressValue] = useState('');
 
   const myRequests = requests.filter(r => r.userId === currentUser?.id);
 
@@ -121,6 +125,22 @@ export const UserDashboard: React.FC = () => {
     else if (e.key === 'Escape') cancelEditingAddress();
   };
 
+  // Form specific address handler
+  const startFormEditingAddress = () => {
+    setFormEditAddressValue(currentUser?.address || '');
+    setIsFormEditingAddress(true);
+  };
+
+  const saveFormAddress = async () => {
+    if (!formEditAddressValue.trim()) return;
+    setIsAddressSaving(true);
+    const success = await updateUserAddress(formEditAddressValue);
+    setIsAddressSaving(false);
+    if (success) {
+      setIsFormEditingAddress(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-emerald-50/50">
       {/* Header */}
@@ -173,7 +193,7 @@ export const UserDashboard: React.FC = () => {
                   </div>
                 )}
 
-                {/* Address Edit */}
+                {/* Address Edit (Header) */}
                 {isEditingAddress ? (
                   <div className="flex items-center gap-2">
                     <MapPin className="w-3 h-3 text-gray-400" />
@@ -254,6 +274,54 @@ export const UserDashboard: React.FC = () => {
                 </h2>
                 
                 <form onSubmit={handleSubmit} className="space-y-6">
+                  {/* Address Section */}
+                  <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100">
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Pickup Location</label>
+                    {isFormEditingAddress ? (
+                      <div className="flex gap-2">
+                        <Input 
+                          label="" 
+                          value={formEditAddressValue}
+                          onChange={(e) => setFormEditAddressValue(e.target.value)}
+                          placeholder="Enter pickup address"
+                          className="bg-white"
+                        />
+                        <div className="flex gap-2 pt-1">
+                          <Button 
+                            type="button" 
+                            onClick={saveFormAddress} 
+                            disabled={isAddressSaving}
+                            className="px-3"
+                          >
+                            {isAddressSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
+                          </Button>
+                          <Button 
+                            type="button" 
+                            variant="secondary"
+                            onClick={() => setIsFormEditingAddress(false)}
+                            className="px-3"
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-2 text-gray-800">
+                          <MapPin className="w-4 h-4 text-emerald-600" />
+                          <span className="font-medium">{currentUser?.address || 'No address set'}</span>
+                        </div>
+                        <button 
+                          type="button" 
+                          onClick={startFormEditingAddress}
+                          className="text-emerald-600 text-sm font-medium hover:underline flex items-center gap-1"
+                        >
+                          <Edit2 className="w-3 h-3" /> Change
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
                   <div>
                     <div className="flex justify-between items-end mb-1">
                       <label className="text-sm font-medium text-gray-700">What items do you have?</label>

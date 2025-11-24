@@ -165,13 +165,23 @@ export const DriverDashboard: React.FC = () => {
 
                 <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
                   {filter === 'AVAILABLE' ? (
-                    <Button 
-                      onClick={() => handleAccept(req)} 
-                      className="w-full justify-center"
-                      isLoading={loadingAction === req.id}
-                    >
-                      Accept Request
-                    </Button>
+                    <>
+                      <Button 
+                        variant="danger"
+                        onClick={() => handleStatusUpdate(req.id, 'REJECTED')} 
+                        className="flex-1 justify-center"
+                        isLoading={loadingAction === req.id}
+                      >
+                        <XCircle className="w-4 h-4" /> Reject
+                      </Button>
+                      <Button 
+                        onClick={() => handleAccept(req)} 
+                        className="flex-1 justify-center"
+                        isLoading={loadingAction === req.id}
+                      >
+                        Accept Request
+                      </Button>
+                    </>
                   ) : (
                     <>
                       {req.status === 'ACCEPTED' && (
